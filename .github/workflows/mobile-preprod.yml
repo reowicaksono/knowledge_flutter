@@ -35,6 +35,12 @@ jobs:
           echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_OUTPUT"
           echo "Extracted version: $APP_VERSION"
 
+      - name: Debug Flutter
+        run: |
+          which flutter
+          flutter --version
+          dart --version
+
       - name: Decode Keystore
         shell: bash
         run: |
