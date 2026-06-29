@@ -36,9 +36,9 @@ jobs:
           echo "Extracted version: $APP_VERSION"
 
       - name: Decode Keystore
+        shell: bash
         run: |
-          echo "${{secrets.MOBILE_RELEASE_KEYSTORE}}" > release.keystore.asc
-          gpg --passphrase "${{secrets.MOBILE_KEY_PASSWORD}}" --batch -d release.keystore.asc > android/key.jks
+          printf '%s' "${{ secrets.MOBILE_RELEASE_KEYSTORE }}" | base64 --decode > android/key.jks
 
       - name: Create key.properties
         run: |
