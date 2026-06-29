@@ -1,0 +1,78 @@
+name: BUILD & PUSH APK MOBILE (PREPROD)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "**"
+      - ".github/workflows/mobile-preprod.yml"
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v1
+
+      - uses: actions/setup-java@v1
+        with:
+          distribution: "temurin"
+          java-version: "17"
+
+      - uses: subosito/flutter-action@v1
+        with:
+          flutter-version: "3.38.5"
+        env:
+          KEY_JKS: ${{ secrets.MOBILE_RELEASE_KEYSTORE }}
+          SIGNING_KEY_ALIAS: ${{ secrets.MOBILE_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.MOBILE_KEY_PASSWORD }}
+          SIGNING_STORE_PASSWORD: ${{ secrets.MOBILE_KEY_PASSWORD }}
+
+      - name: "Get App version"
+        id: app_version
+        run: |
+          APP_VERSION=$(grep -E "^version:" pubspec.yaml | sed 's/^version:[[:space:]]*//' | cut -d+ -f1 | tr -d ' ')
+          echo "APP_VERSION=$APP_VERSION" >> "$GITHUB_OUTPUT"
+          echo "Extracted version: $APP_VERSION"
+
+      - name: Decode Keystore
+        run: |
+          echo "${{secrets.MOBILE_RELEASE_KEYSTORE}}" > release.keystore.asc
+          gpg --passphrase "${{secrets.MOBILE_KEY_PASSWORD}}" --batch -d release.keystore.asc > android/key.jks
+
+      - name: Create key.properties
+        run: |
+          cd android
+          touch key.properties
+          echo storePassword=${{ secrets.MOBILE_KEY_PASSWORD }} > key.properties
+          echo keyPassword=${{ secrets.MOBILE_KEY_PASSWORD }} >> key.properties
+          echo keyAlias=${{ secrets.MOBILE_KEY_ALIAS }} >> key.properties
+          echo storeFile=key.jks >> key.properties
+
+      - name: "Create Firebase Options"
+        run: echo "${{ secrets.FIREBASE_OPTIONS_BASE64 }}" | base64 -d > lib/firebase_options.dart
+
+      - name: "Create Google Services JSON"
+        run: echo "${{secrets.GOOGLE_SERVICES_BASE64}}" | base64 -d > android/app/google-services.json
+
+      # - name: Create .env file
+      #   run: |
+      #     echo "${{ vars.MOBILE_STAGING_ENV }}" > .env
+
+      - name: Get Dependencies
+        run: |
+          flutter pub get
+
+      - name: Build APK
+        run: |
+          flutter build apk
+
+      - name: Push to Staging Releases
+        uses: ncipollo/release-action@v1
+        with:
+          artifacts: "build/app/outputs/flutter-apk/*"
+          tag: ${{ steps.app_version.outputs.APP_VERSION }}-staging
+          prerelease: true
+          generateReleaseNotes: true
+          token: ${{ secrets.IMAGE_PUSH_TOKEN }}
+# build/ios/iphoneos/app.ipa
